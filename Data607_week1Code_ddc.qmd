@@ -1,0 +1,78 @@
+---
+title: "Week 1 Code Base"
+format: html
+editor: visual
+execute: 
+  echo: true 
+---
+
+## Introduction
+
+The data set I chose for this assignment is describing stars by observations such as temperature, absolute magnitude, color. I found that it is often used for machine learning, so it would be interesting to come back to this data later in the semester or for a different class.
+
+<https://raw.githubusercontent.com/VaishnaviAsuri/Classification-of-Stars-from-a-NASA-dataset/refs/heads/main/Stars_2.csv>
+
+## Body
+
+The first step is to install necessary packages and read in the data from github.
+
+```{r}
+library(tidyverse)
+
+stars <- read.csv("https://raw.githubusercontent.com/VaishnaviAsuri/Classification-of-Stars-from-a-NASA-dataset/refs/heads/main/Stars_2.csv")
+
+
+```
+
+Here I'll clean the data a bit by renaming columns, removing a column, and consolidating observation names
+
+```{r}
+stars <- stars |> 
+  rename(Average_Luminosity_of_Sun = L, Average_Radius_of_Sun = R, Absolute_Magnitude = A_M) |> 
+  select(-Type) |> 
+  mutate(Color = case_when(Color == "Blue White" ~ "Blue-White",
+                           Color == "Blue white" ~ "Blue-White",
+                           Color == "Blue-white" ~ "Blue-White",
+                           Color == "white" ~ "White",
+                           Color == "whitish" ~ "White", 
+                           TRUE ~ Color))
+
+```
+
+Grouping stars by color and finding the median absolute magnitude and temperatures
+
+```{r}
+by_color <- stars |> 
+  group_by(Color) |> 
+  summarize(median_absolute_magnitude = median(Absolute_Magnitude),
+            median_temperature = median(Temperature))
+
+```
+
+Removing some columns so that the colors fit nicely on a graph
+
+```{r}
+by_color_simple <- by_color[-c(4, 5, 11, 12, 13),]
+
+
+```
+
+Graphing the simplified version of by_color where each point has a label
+
+```{r}
+
+ggplot(by_color_simple, aes(x = median_absolute_magnitude, 
+                            y = median_temperature)) + 
+  geom_point() + 
+  geom_label(aes(label = Color)) + 
+  expand_limits(x =-15) + 
+  expand_limits(x = 20) +
+  labs(title = "Colors of Stars", 
+       subtitle = " By Temperature and Absolute Magnitude",
+       x = "Median Absolute Magnitude", 
+       y = "Temperature (Degrees Kelvin)")
+```
+
+## Conclusion
+
+I found this to be a fun exercise in using some of what already knew about R and adding in some new functions I picked up from the text as well as the Data Camp course. My findings using the graph are consistent with generally accepted observations about stars within the astronomical community, so the graph was created correctly. I hope to revisit this data set in the future with the skills I develop in this class in order to find more insights. This data set is usually used for machine learning so it would be a natural progression to build an algorithm that could predict some features of these stars provided a limited set of observations.

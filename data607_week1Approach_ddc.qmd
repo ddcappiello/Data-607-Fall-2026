@@ -1,0 +1,19 @@
+---
+title: "Data 607 Week 1 Approach"
+format: html
+editor: visual
+execute: 
+  echo: true 
+---
+
+## 
+
+# Problem
+
+Since this week's assignment is simple I decided to choose a simple data set. I completed the Google Data Analytics certificate in Coursera in 2022 and this data set caught my eye to use as a first data project after the course. I've always had an interest in the physical sciences, specifically physics and astronomy, so this NASA stars data set seemed a natural place to start. As it turned out, I started a job shortly after and never got around to doing anything with it. What I'll do is clean the data by renaming the columns to be what the observations are describing, aggregate the data because there are multiple that describe the same type of stars (for instance; blue-white, Blue white, and Blue-White are all separate observations but should be one), and then group by a specific variable to see if I can draw any conclusions about star type, spectral class, or temperature. I'll use ggplot to make some graphs that show what I find. I can verify my results by doing some brief research and finding a chart that compares these variables.
+
+The data can be found here: <https://raw.githubusercontent.com/VaishnaviAsuri/Classification-of-Stars-from-a-NASA-dataset/refs/heads/main/Stars_2.csv>
+
+# Challenges
+
+I don't anticipate many challenges for this first assignment aside from learning some new packages and remembering syntax as I haven't used R seriously in years. For instance, I used read.csv() to load the data instead of saving it locally so that my analysis can be reproducible. I also anticipate learning more about ggplot because I only made basic bar graphs, scatter plots, and box and whisker charts for class in the past.
