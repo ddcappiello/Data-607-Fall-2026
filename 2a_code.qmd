@@ -1,0 +1,78 @@
+---
+title: "SQL and R"
+author: "Dylan DiTucci-Cappiello"
+format: pdf
+editor: visual
+---
+
+## Data Collection
+
+I first created a Google Form asking participants to rate six movies released within the last three years on a scale from 1-5 stars and and option for having never seen the movie.
+
+![Movie Ratings Questionnaire](images/Screenshot 2026-09-13 222921.png){width="512"}
+
+## Creating a Database in SQL
+
+After receiving the responses, I saved them as a CSV file. I created a data table using pgAdmin4 and made sure to match the columns to those from my survey data. I named the column that stores the time stamp as userid for later use in R.
+
+```{sql connection=}
+#| eval: false
+#| include: false
+CREATE TABLE movies2 (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(30),
+    project_hail_mary VARCHAR(30),
+    obsession VARCHAR(30),
+	the_odyssey VARCHAR(30),
+    oppenheimer VARCHAR(30),
+	anora VARCHAR(30),
+    barbie VARCHAR(30)
+);
+```
+
+```{sql connection=}
+#| eval: false
+#| include: false
+copy movies2
+FROM 'C:\Users\...\movieratings.csv' 
+DELIMITER ',' 
+CSV HEADER;
+
+
+```
+
+![Data table in postgresql](images/Screenshot 2026-09-13 222826.png){width="564"}
+
+## Reading and Cleaning Data in R
+
+I connected my RStudio session to my database and read in the table as a dataframe called ratings. I simply wrote over the time stamps with the index of the survey response to use as an anonymous id. After, I removed one of the survey entries since it was the only one that responded with "I have not seen this movie". This litwise deletion might be more useful when there are many more responses because in this instance, it deletes 20% of my survey data.
+
+```{r}
+library(DBI)
+library(RPostgres)
+library(tidyverse)
+
+connection <- dbConnect(  RPostgres::Postgres(),
+                          dbname = "data607",
+                          host   = "localhost",      
+                          port   = 5432,             
+                          user   = "postgres",
+                          password = "2718"
+)
+
+ratings <- dbReadTable(connection, "movies")
+
+print(ratings)
+
+ratings <- ratings |> 
+  mutate(userid = case_when( userid == "2026/09/12 9:02:44 AM AST" ~ "1",
+                             userid == "2026/09/12 10:13:03 AM AST" ~ "2",
+                             userid == "2026/09/12 11:07:46 AM AST" ~ "3",
+                             userid == "2026/09/13 6:53:11 PM AST" ~ "4",
+                             userid == "2026/09/13 6:55:39 PM AST" ~ "5"
+  ))
+print(ratings)
+
+ratings <- ratings[-c(2),]
+
+```

@@ -1,0 +1,112 @@
+---
+title: "Classification Metrics"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+##  The Data
+
+The data in question is performance data from a machine learning model used to classify sex of penguins. The columns are the .pred_female, the percent chance the model assigns the specific penguin to being female; .pred_class, the decision the model makes based off of the percent chance; and sex, the actual sex of the penguin.
+
+I loaded the data and packages I needed, then dove right in, like a penguin into the briny deep. I created a new column to assign true positive, false positive, true negative, or false negative to each of the predictions.
+
+```{r}
+library(tidyverse)
+
+df <-read.csv('https://raw.githubusercontent.com/acatlin/data/refs/heads/master/penguin_predictions.csv')
+
+df <- df |> mutate(observation_type_50 = case_when(.pred_class == "female" & sex == "female" ~ "TP", .pred_class == "male" & sex == "female" ~ "FN", .pred_class == "female" & sex == "male" ~ "FP", .pred_class == "male" & sex == "male" ~ "TN", TRUE ~ "0")) 
+
+head(df)
+
+```
+
+# Null Error Rate
+
+The Null Error Rate is simply the ratio of the size of the minority class to the size of the total sample. In this case, the number of female penguins to the total number of penguins observed.
+
+```{r}
+df |> count(sex) 
+
+null_error <- 39/93
+```
+
+# Plot showing the distribution of the actual class (sex)
+
+ggplot(df, aes(x = sex)) + geom_bar()
+
+# Importance of the null error rate
+
+Given a certain number of observations, the null error rate would be the error rate if a model only guessed the more likely class. This provides a baseline of performance against which to test a classification model.
+
+Here I will add some columns to the data set that store the prediction classes for 0.2 and 0.8 thresholds as well whether the predictions are true positives, false positives, true negatives, or false negatives.
+
+```{r}
+df <- df |> mutate(pred_class_20 = case_when(.pred_female >= 0.2 ~ "female", .pred_female < 0.2 ~ "male", TRUE ~ "0"), observation_type_20 = case_when(pred_class_20 == "female" & sex == "female" ~ "TP", pred_class_20 == "male" & sex == "female" ~ "FN", pred_class_20 == "female" & sex == "male" ~ "FP", pred_class_20 == "male" & sex == "male" ~ "TN", TRUE ~ "0"), pred_class_80 =case_when(.pred_female >= 0.8 ~ "female", .pred_female < 0.8 ~ "male", TRUE ~ "0"), observation_type_80 = case_when(pred_class_80 == "female" & sex == "female" ~ "TP", pred_class_80 == "male" & sex == "female" ~ "FN", pred_class_80 == "female" & sex == "male" ~ "FP", pred_class_80 == "male" & sex == "male" ~ "TN", TRUE ~ "0"))
+```
+
+I'll store the counts of each number of observation type by threshold in it's own variable for easy viewing.
+
+```{r}
+# True Positives (TP)
+tp_20 <- sum(df$observation_type_20 == "TP", na.rm = TRUE)
+tp_50 <- sum(df$observation_type_50 == "TP", na.rm = TRUE)
+tp_80 <- sum(df$observation_type_80 == "TP", na.rm = TRUE)
+
+# False Positives (FP)
+fp_20 <- sum(df$observation_type_20 == "FP", na.rm = TRUE)
+fp_50 <- sum(df$observation_type_50 == "FP", na.rm = TRUE)
+fp_80 <- sum(df$observation_type_80 == "FP", na.rm = TRUE)
+
+# True Negatives (TN)
+tn_20 <- sum(df$observation_type_20 == "TN", na.rm = TRUE)
+tn_50 <- sum(df$observation_type_50 == "TN", na.rm = TRUE)
+tn_80 <- sum(df$observation_type_80 == "TN", na.rm = TRUE)
+
+# False Negatives (FN)
+fn_20 <- sum(df$observation_type_20 == "FN", na.rm = TRUE)
+fn_50 <- sum(df$observation_type_50 == "FN", na.rm = TRUE)
+fn_80 <- sum(df$observation_type_80 == "FN", na.rm = TRUE)
+```
+
+```{r}
+cm_20 <- table(df$pred_class_20, df$sex)
+print(cm_20)
+
+cm_50 <- table(df$.pred_class, df$sex)
+print(cm_50)
+
+cm_80 <- table(df$pred_class_80, df$sex)
+print(cm_80)
+```
+
+# Performance Metrics
+
+```{r}
+
+# Accuracy = TRUES/TOTAL, TP+TN/ (TP+TN+FP+FN)
+accuracy_20 <- (tp_20 + tn_20) / (tp_20 + tn_20 + fp_20 + fn_20)
+accuracy_50 <- (tp_50 + tn_50) / (tp_50 + tn_50 + fp_50 + fn_50)
+accuracy_80 <- (tp_80 + tn_80) / (tp_80 + tn_80 + fp_80 + fn_80)
+
+# Precision = TP/(TP+FP)
+precision_20 <- tp_20 / (tp_20 + fp_20)
+precision_50 <- tp_50 / (tp_50 + fp_50)
+precision_80 <- tp_80 / (tp_80 + fp_80)
+
+# Recall= TP / (TP+FN)
+recall_20 <- tp_20 / (tp_20 + fn_20)
+recall_50 <- tp_50 / (tp_50 + fn_50)
+recall_80 <- tp_80 / (tp_80 + fn_80)
+
+
+# F1 score = HM(P,R), namely 2(P*R)/(P+R)
+f1_20 = 2*(precision_20 * recall_20) / (precision_20 + recall_20)
+f1_50 = 2*(precision_50 * recall_50) / (precision_50 + recall_50)
+f1_50 = 2*(precision_80 * recall_80) / (precision_80 + recall_80)
+```
+
+# Threshold Use Cases
+
+The higher the probability threshold, the less likely we are to have false positives. The lower the probability threshold, the less likely we are to have false negatives. A threshold of 0.8 would be beneficial in a use case like a spam filter for email, whereas a threshold of 0.2 would be better for screening for a disease.
