@@ -1,0 +1,13 @@
+---
+title: "Assignment 3A Global Baseline Estimate"
+format: pdf
+editor: visual
+---
+
+## Introduction
+
+Here, I am tasked with implementing a Global Baseline Estimate recommendation system in R using the information you collected on movie ratings. The Global Baseline Estimate in this case is Mean Movie Rating (mean of the average ratings given to each movie) + a specific movie's rating relative to average + a specific critic's rating relative to average. This will yield an estimation of the rating a specific critic would give to a movie they have not yet seen.
+
+## Challenges
+
+My data is already stored in SQL and I can read it into R, the only things I can call into question is the quality of the data set and to to best store these estimates. I deleted a whole row out of the 5 total I gathered last week because this one reviewer was the only one who responded with "I have not seen this movie". Seeing the task at hand, I will reincorporate this user and their ratings back into the data set in order to create a recommendation using the Global Baseline Estimate.

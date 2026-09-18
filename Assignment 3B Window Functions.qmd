@@ -1,0 +1,13 @@
+---
+title: "Assignment 3B Window Functions"
+format: pdf
+editor: visual
+---
+
+## Introduction
+
+This assignment will test my use of window functions, which unlike aggregate functions, make an output that is available for each row of data. I will use functions in dplyr to calculate year-to-date and a six-day moving averages. Although I am not using window functions in SQL, I would still like to use SQL in some capacity, even if it just simply creating a table like last week's assignment.
+
+## Challenges
+
+While this assignment is fairly straightforward, I do anticipate some issues with using window functions for the first time. Like everything I have created for this class, it will take time for me to grasp the when window functions are called for and how to use them most effectively.
