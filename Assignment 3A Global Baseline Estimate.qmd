@@ -11,3 +11,95 @@ Here, I am tasked with implementing a Global Baseline Estimate recommendation sy
 ## Challenges
 
 My data is already stored in SQL and I can read it into R, the only things I can call into question is the quality of the data set and to to best store these estimates. I deleted a whole row out of the 5 total I gathered last week because this one reviewer was the only one who responded with "I have not seen this movie". Seeing the task at hand, I will reincorporate this user and their ratings back into the data set in order to create a recommendation using the Global Baseline Estimate.
+
+First, I'll load the data into R from the table I made Postgres. This time, I'll keep the critic who didn't see all of the movies. I'll also replace the "I have not seen this movie" with NA.
+
+```{r}
+library(DBI) 
+library(RPostgres) 
+library(tidyverse)
+
+connection <- dbConnect( RPostgres::Postgres(), 
+                         dbname = "data607", 
+                         host = "localhost",
+                         port = 5432,
+                         user = "postgres", 
+                         password = "2718" )
+
+ratings <- dbReadTable(connection, "movies")
+
+ratings <- ratings |> mutate(userid = case_when(
+  userid == "2026/09/12 9:02:44 AM AST" ~ "critic1", 
+  userid == "2026/09/12 10:13:03 AM AST" ~ "critic2", 
+  userid == "2026/09/12 11:07:46 AM AST" ~ "critic3", 
+  userid == "2026/09/13 6:53:11 PM AST" ~ "critic4", 
+  userid == "2026/09/13 6:55:39 PM AST" ~ "critic5"),
+  across(everything(), ~replace(., . == "I have not seen this movie","")))
+
+
+```
+
+I have to clean the data a little more intentionally. First, I'll remove the "stars" from each observation.
+
+```{r}
+
+ratings <- ratings |> 
+  mutate(  across(everything(), ~replace(., . == "5 Stars", 5)),
+           across(everything(), ~replace(., . == "4 Stars", 4)),
+           across(everything(), ~replace(., . == "3 Stars", 3)),
+           across(everything(), ~replace(., . == "2 Stars", 2))
+  )
+```
+
+Next, I'll convert the data types for my ratings from characters to integers. This will allow me to take averages.
+
+```{r}
+ratings <- ratings |> 
+  mutate( Project.Hail.Mary = as.integer(Project.Hail.Mary),
+          Obsession = as.integer(Obsession),
+          The.Odyssey = as.integer(The.Odyssey),
+          Oppenheimer = as.integer(Oppenheimer),
+          Anora = as.integer(Anora),
+          Barbie = as.integer(Barbie)
+          )
+```
+
+I will now save the average rating for each movie in a new data frame called movies_avgs.
+
+```{r}
+movies_avgs <- ratings |> 
+  summarise(avg_project_hail_mary = mean(Project.Hail.Mary, na.rm = TRUE),
+            avg_obsession = mean(Obsession, na.rm = TRUE),
+            avg_the_odyssey = mean(The.Odyssey),
+            avg_oppenhiemer = mean(Oppenheimer, na.rm = TRUE),
+            avg_anora = mean(Anora),
+            avg_barbie = mean(Barbie),
+            )
+```
+
+I still need to find the average rating given by each critic. To do this, I will add a column to the ratings data frame called critic_avg. The function rowMeans takes the average across a row of data instead of a column, pick is choosing which columns to take the row mean across, and where(is.integer) is the condition for the pick function. This allows me to exclude the userid column.
+
+```{r}
+ratings <- ratings %>%
+  mutate(critic_avg = rowMeans(pick(where(is.integer)), na.rm = TRUE))
+```
+
+I can use rowMeans again to find the mean movie rating. In this case, the condition for the pick function includes all the columns.
+
+```{r}
+movies_avgs <- movies_avgs |> 
+  mutate(movie_mean = rowMeans(pick(everything())))
+```
+
+Now, I can finally calculate my Global Baseline Estimates for critic2. They did not see Project Hail Mary, Obsession, or Oppenheimer and the Global Baseline Estimate for these movies are 3.42, 3.92, and 3.17 respectively. With these estimates, I would feel comfortable recommending Obsession.
+
+```{r}
+#critic2's Global Baseline Estimate for Project Hail Mary
+3.91 + (4 - 3.91) + (3.33 - 3.91)
+
+#critic2's Global Baseline Estimate for Obsession
+3.91 + (4.5 - 3.91) + (3.33 - 3.91)
+
+#critic2's Global Baseline Estimate for Oppenhiemer
+3.91 + (3.75 - 3.91) + (3.33 - 3.91)
+```

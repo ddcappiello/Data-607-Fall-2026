@@ -11,3 +11,43 @@ This assignment will test my use of window functions, which unlike aggregate fun
 ## Challenges
 
 While this assignment is fairly straightforward, I do anticipate some issues with using window functions for the first time. Like everything I have created for this class, it will take time for me to grasp the when window functions are called for and how to use them most effectively.
+
+```{r}
+library(RKaggle)
+library(tidyverse)
+library(slider)
+```
+
+```{r}
+temperatures <- RKaggle::get_dataset("sudalairajkumar/daily-temperature-of-major-cities")
+
+```
+
+Let's start by filtering this data set down. Since the data run from 1/1/1995 to 5/13/2020, I chose 2020 to be the year to look at. I chose to look simply at New York City.
+
+```{r}
+temperatures <- temperatures |> 
+  filter(City == "New York City",
+         Year == "2020")
+```
+
+First, I'll find the year-to-date average. This can be computed by taking the mean of all daily average temperatures.
+
+```{r}
+temperatures |> 
+  summarise(ytd_temp = mean(AvgTemperature))
+```
+
+This shows the average daily temperature from 1/1/2020 - 5/13/2020 to be a brisk 45 degrees.
+
+Now I'll use the slide_mean function from the slider package to calculate the 6-day rolling average. Note, the "before" argument takes in the number of observations to fit into the window *before* the observation in the row in question. This makes sense when looking at a moving average with a "window" of size k. $$\frac{1}{k}\sum_{i = n - k + 1}^{n} x_{i}$$
+
+```{r}
+temperatures <- temperatures |> 
+  mutate(six_day_avg = round(
+    slide_mean(AvgTemperature, before = 5), digits = 1))
+
+temperatures$six_day_avg
+
+
+```
