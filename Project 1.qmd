@@ -1,0 +1,134 @@
+---
+title: "Project 1"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+The goal of this project is to read data into R from a text file that has a clear format, but not one easy for R to comprehend. After the file is read into R, I must clean the data and compute an average based on data that will involve some manipulation.
+
+## Challenges
+
+There are three distinct challenges to this project. First, I have never loaded data into R from a non-delimited file. My knowledge of using functions like read_csv do not come in handy, and neither does chapter 7 from R for Data Science. Second, this dataset is messy in a way I have not seen before. There seem to be two header rows and some columns that contain more than one observation. Lastly, I will have to find and use new functions because what I know is not enough.
+
+## Analysis
+
+Like always, let's load in tidyverse and read in the data. Since the data is coming from a text file and not some type of delimited file, I chose to use read_lines. This reads each line of the text into a character vector. Next, I save this raw character vector into a tibble so I can start cleaning the data using functions in the tidyverse.
+
+```{r}
+library(tidyverse)
+
+raw <- read_lines("https://raw.githubusercontent.com/ddcappiello/Data-607-Fall-2026/refs/heads/main/tournamentinfo.txt")
+
+raw_tibble <- tibble(raw)
+
+glimpse(raw_tibble)
+```
+
+Before the data gets cleaned, we can see that starting with the first line, every third line of text is a long string of dashes. This obviously needs to be removed. I did this by using the modulo sign, %%. This allowed me to filter out every row that has remainder 1 when divided by three. I then removed the two header rows as they are not observations. I will be sure to add them as column names later on. I then split the filtered tibble into two separate tibbles so that I can have to sets of data where each row corresponds to a specific player.
+
+```{r}
+filter_tibble <- raw_tibble |> 
+  filter(row_number() %% 3 != 1) 
+
+filter_tibble <- filter_tibble[-c(1:2),]
+
+t1 <- filter_tibble |> 
+  filter(row_number() %% 2 == 1)
+
+t2 <- filter_tibble |> 
+  filter(row_number() %% 2 == 0)
+
+```
+
+Here, I'll use a new function I learned. Since the text in each row is separated by a "\|", I can use separate_wider_delim() to separate each row entry into a new column based on the text that is in between each "\|". For these first two uses of this function, I had to name the new columns for the data to go into. I did this by looking at the data and referencing the original header text I deleted. After, I added a new column to t2 match the pair_number column in t1. Then I used separate_wider_delim() a few more times to break down the column that had the USCF ID, player's pre-rating, and player's post-rating. I made sure both ratings were then converted to integer values.
+
+```{r}
+t1 <- t1 |> 
+  separate_wider_delim(cols = raw, 
+                       delim = "|", 
+                       names = c("pair_number", 
+                                 "player_name",
+                                 "total_points",
+                                 "round_1",
+                                 "round_2",
+                                 "round_3",
+                                 "round_4",
+                                 "round_5",
+                                 "round_6",
+                                 "round_7"), too_many = "drop")
+
+t2 <- t2 |> 
+  separate_wider_delim(cols = raw, 
+                       delim = "|", 
+                       names = c("player_state", 
+                                 "id_and_ratings",
+                                 "n_value",
+                                 "round_1_color",
+                                 "round_2_color",
+                                 "round_3_color",
+                                 "round_4_color",
+                                 "round_5_color",
+                                 "round_6_color",
+                                 "round_7_color"), too_many = "drop") |> 
+  mutate(pair_number = 1:n()) |> 
+  separate_wider_delim(cols = id_and_ratings,
+                       delim = "/",
+                       names = c("USCF_ID", "ratings")) |> 
+  separate_wider_delim(col = ratings,
+                       delim = ":",
+                       names = c(NA,"ratings")) |> 
+  separate_wider_delim(cols = ratings,
+                       delim = "->",
+                       names = c("pre_rating", "post_rating")) |>
+  mutate(across(c(pre_rating, post_rating), parse_number)) |> 
+  mutate(across(c(pre_rating, post_rating), as.integer))
+
+```
+
+After some trial and error, I found that applying separate_wider_delim() directly to the columns that had the opponent and result for each round did not work. I then tried to remove some of the whitespace with str_squish and then applied the function. Here, I split these columns into the outcome and opponent. Then I made sure to convert the pair number and round_x_opponent columns to integers, just as I did for t2.
+
+```{r}
+t1 <- t1 |> 
+  mutate(across(round_1:round_7, str_squish)) |> 
+  separate_wider_delim(cols = round_1:round_7,
+                       delim = " ",
+                       names = c("outcome", "opponent"),
+                       names_sep = "_", 
+                       too_few = "align_start") |> 
+  mutate(across(ends_with("_opponent")|ends_with("_number"), as.integer)) 
+```
+
+Next, I created a new table that contains both t1 and t2. Since they only share one column, namely pair_number, t1 and t2 are joined on that. Next, I need to compute the average pre-rating for each player's opponents. To do this, I created helper columns that reference each player's opponent's pre-rating by round. Afterwards, I created the column avg_opponent_pre_rating using the rowMeans() function that I learned in assignment 3. I made sure to use na.rm = TRUE and pass the row mean through a round function.
+
+```{r}
+tournament_results_full <- full_join(t1, t2) 
+
+tournament_results_full <- tournament_results_full |> 
+  mutate(round_1_opponent_rating = pre_rating[round_1_opponent],
+         round_2_opponent_rating = pre_rating[round_2_opponent],
+         round_3_opponent_rating = pre_rating[round_3_opponent],
+         round_4_opponent_rating = pre_rating[round_4_opponent],
+         round_5_opponent_rating = pre_rating[round_5_opponent],
+         round_6_opponent_rating = pre_rating[round_6_opponent],
+         round_7_opponent_rating = pre_rating[round_7_opponent])
+
+tournament_results_full <- tournament_results_full |> 
+  mutate(avg_opponent_pre_rating = round(rowMeans(across(round_1_opponent_rating:round_7_opponent_rating), na.rm = TRUE)))
+
+```
+
+Now that the average opponent's pre-rating has been calculated, I can select only the necessary columns into a new table called tournament_results. Then it can easily be saved as a csv file using write.csv().
+
+```{r}
+tournament_results <- tournament_results_full |> 
+  select(player_name, player_state, total_points, pre_rating, avg_opponent_pre_rating)
+
+write.csv(tournament_results, file = "tournament_results.csv")
+```
+
+## Conclusion
+
+This project was, in fact, a challenge for me. I first tried to use Claude to assist me, but the solutions it had were too difficult for me to grasp so I decided not to use it. As a result of this, my code relied **heavily** on brute force methods like helper columns and trial and error. I'm certain there are more elegant approaches to this problem and cannot wait to see the solutions my classmates have put forward. I make no promises on which of these projects will be my favorite, but I certainly feel accomplished after having done it on my own.
