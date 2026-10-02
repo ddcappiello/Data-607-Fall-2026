@@ -1,0 +1,14 @@
+---
+title: "Assignment 5A"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+This assignment has me recreating a data table from an image that has a table in an untidy format and then analyzing said data. The data refer to two airlines and the number of flights they have at five different airports that are either on time or delayed. I will put the data into a wide format in the csv and try to clean it minimally before it is in R. This way, I can use dplyr in order to have a fully reproducible deliverable. I can see that after I import my data into R, I should have columns that contain airline, airport, status (on time or delayed), and then a count.
+
+## Challenges 
+
+I anticipate being challenged by needing to pivot the data in order to turn the wide data into tidy, long data. I have only ever done this using the Power Query editor in Excel. The Hadley Wickham article should come in handy here

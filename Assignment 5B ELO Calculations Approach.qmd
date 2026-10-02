@@ -1,0 +1,14 @@
+---
+title: "Assignment 5B"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+This assignment covers the number of points we expect the chess players seen in Project 1 to have gained based off their rating and the ratings of their opponents. I will then compare these expected values to the players actually scored during this tournament. After, I will find the difference and percent difference between the two values and list the five players who most over-performed and the five players who most under-performed.
+
+## Challenges
+
+The biggest challenges lie in calculating the expected points and the ELO ratings. I am sure I can find a reasonable formula for ELO, and I think the most accurate formula would be from USCF since that is the organization who compiled the data I analyzed. I will need to research how points are determined, but I suspect it's a certain number for a win, draw, or loss. I am debating on whether or not to simply assume that we should expect a higher rated player to defeat a lower rated player.
