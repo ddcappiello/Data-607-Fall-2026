@@ -1,0 +1,86 @@
+---
+title: "Assignment 5A"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+This assignment has me recreating a data table from an image that has a table in an untidy format and then analyzing said data. The data refer to two airlines and the number of flights they have at five different airports that are either on time or delayed. I will put the data into a wide format in the csv and try to clean it minimally before it is in R. This way, I can use dplyr in order to have a fully reproducible deliverable. I can see that after I import my data into R, I should have columns that contain airline, airport, status (on time or delayed), and then a count.
+
+## Challenges
+
+I anticipate being challenged by needing to pivot the data in order to turn the wide data into tidy, long data. I have only ever done this using the Power Query editor in Excel. The Hadley Wickham article should come in handy here.
+
+## Analysis
+
+Like always, it's time to load tidyverse and read in the data. Here, I created a csv file that matched the sample image in the assignment prompt. I read it in using read.csv into a table called "raw". Since I already know what I want the column names to be, I can rename the columns that got read in as X and X.1, since they were blank in the file, to airline and status. Next I can filter out that row of blanks that was used to separate the two groups of observation by airline in the original csv.
+
+```{r}
+library(tidyverse)
+
+raw <- read.csv("C:/Users/dcaps/Downloads/arrival delays - Sheet1.csv")
+
+air_delays <- raw |> 
+  rename(airline = X, status = X.1) |> 
+  filter(status != "")
+```
+
+Next, I will use the fill() function to carry forward the values in the airlines column. This can work because in reading down the airline column, I have alaska, blank, am west, blank. The blanks have to be alaska and am west in that order and fill() will carry down the preceding row's data. It turns out that fill works only on NA values so I used replace_values() to replace the instances of "" with NA.
+
+```{r}
+air_delays <- air_delays |> 
+  mutate(airline = replace_values(airline, "" ~ NA)) |> 
+  fill(airline)
+
+```
+
+Now it's time to pivot the data. I used pivot_longer() in order to make this data long. I then renamed the column that contained the airport cities and renamed the airlines and cities to be in a regular format.
+
+```{r}
+air_delays <- air_delays |> 
+  pivot_longer(los.angeles:seattle) |> 
+  rename(airport = name) |> 
+  mutate(airport = case_when(airport == "los.angeles" ~ "Los Angeles",
+                             airport == "san.diego" ~ "San Diego",
+                             airport == "san.fransisco"~ "San Fransisco",
+                             airport == "seattle" ~ "Seattle",
+                             airport == "phoenix" ~ "Phoenix")) |> 
+  mutate(airline = case_when(airline == "alaska" ~ "Alaska",
+                             airline == "am west" ~ "AM West"))
+```
+
+Now that the data is clean, I can compare arrival delays for the two airlines. Alaska Airlines is delayed 13% of the time whereas AM West is delayed 11% of the time.
+
+```{r}
+air_delays |> 
+  filter(airline == "Alaska",
+         status == "delayed") |> 
+  summarise(num_delayed_alaska = sum(value))
+
+air_delays |> 
+  filter(airline == "Alaska",
+         status == "on time") |> 
+  summarise(num_on_time_alaska = sum(value))
+
+air_delays |> 
+  filter(airline == "AM West",
+         status == "delayed") |> 
+  summarise(num_delayed = sum(value))
+
+air_delays |> 
+  filter(airline == "AM West",
+         status == "on time") |> 
+  summarise(num_on_time = sum(value))
+
+
+501/(501+3274)
+
+787/(787+6438)
+  
+```
+
+## Conclusion
+
+This assignment highlighted the key differences between wide and long data. I felt the data easier to read in wide format but filtering and summarizing the data was much easier after it was in long format. I felt like once again I brute forced my way into an answer for which airline is more likely to be delayed. I would not be surprised if there is a way to summarize the data more efficiently and calculate the percent of delays that is more efficient and elegant.
