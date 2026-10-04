@@ -1,0 +1,55 @@
+---
+title: "Assignment 5B"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+This assignment covers the number of points we expect the chess players seen in Project 1 to have gained based off their rating and the ratings of their opponents. I will then compare these expected values to the players actually scored during this tournament. After, I will find the difference and percent difference between the two values and list the five players who most over-performed and the five players who most under-performed.
+
+## Challenges
+
+The biggest challenges lie in calculating the expected points and the ELO ratings. I am sure I can find a reasonable formula for ELO, and I think the most accurate formula would be from USCF since that is the organization who compiled the data I analyzed. I will need to research how points are determined, but I suspect it's a certain number for a win, draw, or loss. I am debating on whether or not to simply assume that we should expect a higher rated player to defeat a lower rated player.
+
+## Analysis
+
+In my work in Project 1 I already had columns that stored the ELO of each player's opponent by round. While this might have been unnecessary for the project, it made this analysis easier. I decided to upload the full tournament data as a csv to my github so that I wasn't simply working off of a file saved locally.
+
+Most of the work can be done in one mutate function. I used the expected points formula from USCF which is $\frac{1}{1 + 10^\frac{R_{opponent}-R_{Player}}{400}}$. I thought it made the most sense to store all of these expected points by round in their own columns, like I did for opponent's ELO. After, I used rowSums() to calculate the total expected points earned by each player and found the difference between it and the actual player's points.
+
+```{r}
+library(tidyverse)
+
+tournament_results_full <- read_csv("https://raw.githubusercontent.com/ddcappiello/Data-607-Fall-2026/refs/heads/main/tournament_results%20full.csv")
+
+# 1 / (1 + 10^((R_opponent − R_player) / 400))
+
+tournament_results_full <- tournament_results_full |> 
+  mutate(r1_expected = round(1/ (1 + 10^((round_1_opponent_rating - pre_rating)/400)), 2),
+         r2_expected = round(1/ (1 + 10^((round_2_opponent_rating - pre_rating)/400)), 2),
+         r3_expected = round(1/ (1 + 10^((round_3_opponent_rating - pre_rating)/400)), 2),
+         r4_expected = round(1/ (1 + 10^((round_4_opponent_rating - pre_rating)/400)), 2),
+         r5_expected = round(1/ (1 + 10^((round_5_opponent_rating - pre_rating)/400)), 2),
+         r6_expected = round(1/ (1 + 10^((round_6_opponent_rating - pre_rating)/400)), 2),
+         r7_expected = round(1/ (1 + 10^((round_7_opponent_rating - pre_rating)/400)), 2),
+         expected_points = rowSums(across(ends_with("expected")), na.rm = TRUE),
+         points_difference = expected_points - as.numeric(total_points))
+
+
+```
+
+I calculated the difference as the expected points - total points. This would mean players with a values less than zero over-performed and players with values greater than zero under-performed.
+
+```{r}
+tournament_results_full |> 
+  select(player_name, points_difference) |> 
+  arrange(points_difference) |> 
+  slice(1:5)
+
+tournament_results_full |> 
+  select(player_name, points_difference) |> 
+  arrange(desc(points_difference)) |> 
+  slice(1:5)
+```
