@@ -1,0 +1,14 @@
+---
+title: "Project 2"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+The purpose of this assignment is to clean, transform, and ultimately analyze three sets of untidy data in a wide format. I chose one of the U.S. Bureau of Labor's tables on unemployment by state as submitted by Zaina, a table on popular baby names as submitted by Aniss, and created a simulated table of expenses for Low Income Housing Tax Credit (LIHTC) developments. All three of these tables are wide and will need to be pivoted. The first two are pretty tidy, so I made sure the simulated LIHTC data had some errors to show what I've learned over the past few weeks about cleaning data. In particular I will use parse_number() since it can easily work around characters like "-" or "\$" in financial data. In addition, all data sets are wide and must be converted to long data so pivot_longer() will also come in handy.
+
+## Challenges
+
+I can see some challenges arising from some of the datasets having merged cells in their header rows. Each dataset will need these to be addressed on a case by case basis. While the LIHTC data does not have this issue, I would like to come up with a way to add level of anonymity to the developments. While the data is simulated, including all of the development names, I would like to approach this data as if it were appurtenant to a project that I would work on at my job. I could simply aggregate the data, but adding some layer of masking like replacing the development names with a random unique ID might be interesting to investigate.
