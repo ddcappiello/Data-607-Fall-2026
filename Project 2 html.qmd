@@ -1,0 +1,335 @@
+---
+title: "Project 2"
+author: "Dylan DiTucci-Cappiello"
+date:   today
+
+format:
+
+  html:
+
+    toc: true
+
+    code-fold: true
+
+    theme: flatly
+
+execute:
+
+  echo:    true
+
+  warning: false
+---
+
+## Introduction
+
+The purpose of this assignment is to clean, transform, and ultimately analyze three sets of untidy data in a wide format. I chose one of the U.S. Bureau of Labor's tables on unemployment by state as submitted by Zaina of which I chose only table 1 <https://www.bls.gov/news.release/archives/laus_04082026.htm>, a table on popular baby from the Social Security Administration <https://www.ssa.gov/oact/babynames/top5names.html>, names as submitted by Aniss, and a simulated table of expenses for Low Income Housing Tax Credit (LIHTC) developments which I created myself but now can be found on my personal github <https://github.com/ddcappiello/Data-607-Fall-2026/blob/main/lihtc_expenses.csv>. All three of these tables are wide and will need to be pivoted. The first two are pretty tidy, so I made sure the simulated LIHTC data had some errors to show what I've learned over the past few weeks about cleaning data. In particular I will use parse_number() since it can easily work around characters like "-" or "\$" in financial data. In addition, all data sets are wide and must be converted to long data so pivot_longer() will also come in handy.
+
+## Challenges
+
+I can see some challenges arising from some of the datasets having merged cells in their header rows. Each dataset will need these to be addressed on a case by case basis. While the LIHTC data does not have this issue, I would like to come up with a way to add level of anonymity to the developments. While the data is simulated, including all of the development names, I would like to approach this data as if it were appurtenant to a project that I would work on at my job. I could simply aggregate the data, but adding some layer of masking like replacing the development names with a random unique ID might be interesting to investigate.
+
+## Data Cleaning
+
+First, I loaded in the relevant package and the raw data.
+
+```{r}
+#| include: false
+library(tidyverse)
+
+
+baby_names_raw <- read_csv("https://raw.githubusercontent.com/ddcappiello/Data-607-Fall-2026/refs/heads/main/baby%20names%20-%20Sheet1.csv")
+lihtc_expenses_raw <- read_csv("https://raw.githubusercontent.com/ddcappiello/Data-607-Fall-2026/refs/heads/main/lihtc_expenses.csv", show_col_types = FALSE)
+state_unemployment_raw <- read_csv("https://raw.githubusercontent.com/ddcappiello/Data-607-Fall-2026/refs/heads/main/state%20unemployment%20-%20Sheet1.csv")
+
+```
+
+For the baby names data, I decided to first rename the columns in the raw data and then split the data into two tables, one for boy names and one for girl names. Once the data is split, I can apply the same steps to both tables with the only difference being the value in the column named gender. I first pivot the the columns containing the names and respective ratings. This results in a table containing the columns year, rating, and name. Since the data is split into two different tables based on gender, I can easily add the same value to every row in a new column, gender, using the mutate function. After this, I need to combine the data. Instead of using a join, I used the rbind function which simply appends the two tables. This works because the columns are the same and does not result in any NA values in the data.
+
+```{r}
+t1 <- baby_names_raw |> 
+  rename(year = ...1,
+         r1_girl = Girls,
+         r2_girl = ...3,
+         r3_girl = ...4,
+         r4_girl = ...5,
+         r5_girl = ...6,
+         r1_boy = Boys,
+         r2_boy = ...8,
+         r3_boy = ...9,
+         r4_boy = ...10,
+         r5_boy = ...11
+  ) |> 
+  filter(row_number() != 1 )
+
+glimpse(t1)
+
+t2 <- t1 |> 
+  select(year:r5_girl) |> 
+  pivot_longer(r1_girl:r5_girl) |> 
+  rename(rating = name, name = value) |> 
+  mutate(rating = parse_number(rating),
+         gender = "girl") 
+
+t3 <- t1 |> 
+  select(!r1_girl:r5_girl) |> 
+  pivot_longer(r1_boy:r5_boy) |> 
+  rename(rating = name, name = value) |> 
+  mutate(rating = parse_number(rating),
+         gender = "boy")
+
+baby_names <- rbind(t2, t3) |> 
+  mutate(year = as.numeric(year)) |> 
+  arrange(year)
+
+rm(t1, t2, t3, baby_names_raw)
+
+```
+
+Next, I will work on the state unemployment data. I took a similar approach to the baby name data, but this time I split the data into the three observation types, namely civilian labor force, unemployed, and percent unemployed. After selecting the three observation into separate tables, I once again followed the same steps for each. I pivoted the observations into a long format, renamed the observation type column, and used the function separate_wider_delim that I learned for the first project to temporarily split the months and dates. Next, I added a column containing the row index so I can have a unique value to join the three tables on. After all the data is finally back together, I used the parse number function to get rid of the placeholder commas to retain only the numbers in the value column and then once again pivot the data so that all three observations are in one column. Then I decided to combine the month and year columns using the unite function to make the data a little longer.
+
+```{r}
+s1 <- state_unemployment_raw |> 
+  rename(clf_01_2025 = `Civilian labor force`,
+         clf_11_2025 = ...3,
+         clf_12_2025 = ...4,
+         clf_01_2026 = ...5,
+         unemp_01_2025 = Unemployed,
+         unemp_11_2025 = ...7,
+         unemp_12_2025 = ...8,
+         unemp_01_2026 = ...9,
+         plf_01_2025 = ...10,
+         plf_11_2025 = ...11,
+         plf_12_2025 = ...12,
+         plf_01_2026 = ...13) |>  
+  filter(State != "NA")
+
+s2 <- s1 |> 
+  select(State:clf_01_2026) |> 
+  pivot_longer(clf_01_2025:clf_01_2026) |> 
+  rename(civilian_labor_force = value) |> 
+  separate_wider_delim(cols = name,
+                       delim = "_",
+                       names = c(NA, "month", "year")) |> 
+  mutate(id = 1:n())
+
+s3 <- s1 |> 
+  select(State, starts_with("un")) |> 
+  pivot_longer(unemp_01_2025:unemp_01_2026) |> 
+  rename(unemployed = value) |> 
+  separate_wider_delim(cols = name,
+                       delim = "_",
+                       names = c(NA, "month", "year")) |> 
+  mutate(id = 1:n())
+
+s4 <- s1 |> 
+  select(State, starts_with("pl")) |> 
+  pivot_longer(plf_01_2025:plf_01_2026) |> 
+  rename(percent_unemployed = value) |> 
+  separate_wider_delim(cols = name,
+                       delim = "_",
+                       names = c(NA, "month", "year")) |> 
+  mutate(id = 1:n())
+
+state_unemployment <- s2 |> 
+  left_join(s3 |> select(id, unemployed), by = "id") |> 
+  left_join(s4 |> select(id, percent_unemployed)) |> 
+  select(-id)|> 
+  mutate(across(civilian_labor_force:unemployed, parse_number),
+         across(civilian_labor_force:percent_unemployed, as.numeric)) |> 
+  pivot_longer(civilian_labor_force:percent_unemployed) |>
+  rename(observation = name) |> 
+  unite("date", month, year, sep = "-", remove = TRUE) 
+
+
+
+rm(s1, s2, s3, s4, state_unemployment_raw)
+
+```
+
+To clean this data, I decided not to split it with the use of helper tables. First, I renamed all the column names using rename_with and to_lower since all of these column names had a similar enough format. After, I removed the "prop" in the column names contain property tax data so that I could more easily use separate_wider_delim later on. Before using the parse_number and as.integer, I wanted to replace all instances of a hyphen, "-", with 0. Since it is a standard accounting format to use a hyphen to denote 0, I did not want to lose these hyphens when using the parse_number function. I then used slice to remove two rows at the end of the data that contained a note. Now that the data has been cleaned enough, I can pivot the data to long format. Since all of the column names that are in one column and are in the format "lineitem_year" I can use separate wider delim to bring them into their own columns, one for line item and one for year. While this does slightly widen the data, I believe it is still long since the year is in its own column.
+
+```{r}
+lihtc_expenses <- lihtc_expenses_raw |> 
+  rename_with(~ tolower(gsub(" ", "_", .x, fixed = TRUE))) |> 
+  mutate(development_name = str_to_title(development_name)) |>
+  distinct() |> 
+  rename(tax_2018 = prop_tax_2018,
+         tax_2019 = prop_tax_2019,
+         tax_2020 = prop_tax_2020,
+         tax_2021 = prop_tax_2021,
+         tax_2022 = prop_tax_2022,
+         tax_2023 = prop_tax_2023) |> 
+  mutate(across(opex_2018:tax_2023, \(x) replace_values(x, "-" ~ "0"))) |> 
+  mutate(across(opex_2018:tax_2023, parse_number)) |> 
+  mutate(across(opex_2018:tax_2023, as.integer)) |>
+  slice(-c(42:43))
+
+lihtc_expenses <- lihtc_expenses |> 
+  pivot_longer(opex_2018:tax_2023, 
+               values_to = "expense") |> 
+  separate_wider_delim(cols = name,
+                       delim = "_",
+                       names = c("line_item", "year"))
+
+rm(lihtc_expenses_raw)
+```
+
+## Analysis
+
+Now that all three datasets are clean, I can finally answer some questions about them. For the state unemployment data, Zaina stated it would be interesting to compare unemployment rates between states. She then asked how we could examine their change over time and find which states experienced the largest change in unemployment during the time period represented in the table. To compare the unemployment rates and find the states with the greatest rate of unemployment, I created data pipe that fed into a ggplot column chart. To show the change in the rate if unemployment I first had to filter for the correct observation and time periods since the data is now long. After, I grouped by state and used summarise to create temporary columns that contained the difference between the unemployment rate in January 2026 and January 2025. Note that I did have to rename the dates to jan_2026 and jan_2025 in order to make the calculation work within the summarise function. Now that I have the change, I can pipe that into ggplot. In order to get around a very dense, cluttered graph, I decided to use facet wrap to split the states into four equal groups. This can be done since the data also include Washington D.C. and Puerto Rico which lets me simply divide the data into four equal groups without ordering. I also wanted to show the total amount of unemployed people in each state in a similar type of graph to illustrate how it's better to compare the unemployment rate since each state has a different population. We can see the biggest increase in the rate of unemployment happened in Delaware and the biggest decrease in the rate if unemployment was tied between Ohio, Kentucky, and Indiana.
+
+```{r}
+state_unemployment |> 
+  filter(observation == "percent_unemployed",
+         date %in% c("01-2025", "01-2026")) |> 
+  group_by(State) |> 
+  summarise(jan_2025 = value[date == "01-2025"],
+            jan_2026 = value[date == "01-2026"],
+            change = round(jan_2026 - jan_2025, 1),
+            .groups = "drop") |> 
+  ggplot(aes(x = change, 
+             y = State)) +
+  geom_col() + 
+  geom_text(aes(label = change), hjust = -0.1, size = 3)+
+  facet_wrap(vars(ceiling(rank(-change,
+                               ties.method = "first") / 13)),
+             ncol = 2, 
+             scales = "free_y") +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(title = "Change in Rate of Unemployment Between \nJanuary 2025 and January 2026",
+       x = "Change in Rate of Unemployment", 
+       y = "States") + 
+  theme(strip.text = element_blank())
+
+state_unemployment |> 
+  filter(observation == "unemployed",
+         date == "01-2026") |> 
+  group_by(State) |> 
+  ggplot(aes(x = value, y = State)) +
+  geom_col() + 
+  geom_text(aes(label = value), hjust = -0.1, size = 3)+
+  facet_wrap(vars(ceiling(rank(-value,
+                               ties.method = "first") / 13)),
+             ncol = 2, 
+             scales = "free_y") +
+  labs(title = "Total Unemployed People in Civilian Labor Force", 
+       x = "Number of Unemployed People", 
+       y = "States") + 
+  theme(strip.text = element_blank()) 
+
+```
+
+For the baby names data, Aniss posed the questions: Which names have the longest consecutive appearances in the top five? Does turnover differ between boys’ and girls’ names? The latter question can be answered quite quickly by simply finding the unique names for boys and girls respectively. Since there are more unique girl names, we can conclude that the turnover is quicker for girl names. That is, the boy names tend to stay popular longer than girl names. To answer the question of which names have the longest consecutive appearances in the top five most popular names, more analysis has to be done. In fact, I decided to use Claude to solve this problem. Apparently, this is a gaps and islands problem which revolves around finding consecutive sequences in ordered data. Often this is seen in SQL databases where the gaps are missing data and the islands are what remains in the ordered data. In this case, the gaps are the years in which the names do not appear. First the data is grouped by name and gender and then arranged by year. The first new column calculated is run_id which is the year the name appears minus the row id of that observation within it's own group. This labels each run. For instance the run_id for the three instances of the name Alexis is 1998, 1999 and 1999 respectively because that name first appeared in the ratings in 1999, was absent in 2000, and then reappeared in 2001 and 2002. After this, three columns are created. One to count the length of the streak, one to contain the start year for the streak, and one to contain the end year. In order to clean up the table, slice_max() is used to only keep the the names with the longest consecutive streaks. The second argument in this function should limit the rows to 10, but there are ties so 11 rows appear in the table and, subsequently, on the graph. The graph shows that 9 of the top 11 streaks were boy names which also confirms the claim I made just by seeing that there were more distinct girl names than boy names.
+
+```{r}
+
+baby_names |> 
+  filter(gender == "girl") |> 
+  summarise(unique_names = n_distinct(name))
+
+baby_names |> 
+  filter(gender == "boy") |> 
+  summarise(number_unique_names = n_distinct(name))
+
+baby_names %>%
+  distinct(name, gender, year) %>%
+  group_by(name, gender) %>%
+  arrange(year, .by_group = TRUE) %>%
+  mutate(run_id = year - row_number()) %>%
+  group_by(name, gender, run_id) %>%
+  summarise(run_length = n(),
+            start_year = min(year),
+            end_year   = max(year),
+            .groups = "drop") %>%
+  slice_max(run_length, n = 10) |> 
+  ggplot(aes(x = run_length, y = name, fill = gender)) +
+  geom_col(show.legend = FALSE) +
+  geom_text(aes(label = run_length), hjust = -0.2, size = 3) +
+  facet_grid(gender ~ ., scales = "free_y", space = "free_y") +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.08))) +
+  labs(
+    title = "Longest consecutive streaks in the U.S. top five baby names",
+    subtitle = "Each name's longest unbroken run, 1926–2025",
+    x = "Consecutive years in the top five",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    strip.text.y = element_text(angle = 0, face = "bold"),
+    plot.title = element_text(face = "bold")
+  )
+
+  
+```
+
+Finally, I can analyze the simulated LIHTC data. Since I am supplementing this data myself, there are no associated questions from the discussion post. Instead I will be answering the questions posed to my team when working on the actual data. These questions are: Are the averages of the line items we've collected over all years? What are the averages if the line items in the first and last years of collection? What are the percent changes of these line items between the first and last years of collection. To answer these questions, I simply combined the relevant group_by and filter functions onto the cleaned lihtc_expenses data. In order to easily calculate the percent difference, I did widen the data but did only passed the values through to gg_plot2 in order to preserve the long format of the cleaned data.
+
+```{r}
+lihtc_expenses |> 
+  group_by(line_item) |> 
+  summarise(average_expense = mean(expense, na.rm = TRUE))
+
+lihtc_expenses |> 
+  group_by(line_item, year) |> 
+  filter(year %in% c(2018, 2023)) |> 
+  summarise(average_expense = round(mean(expense, na.rm = TRUE)))
+
+lihtc_expenses |> 
+  group_by(line_item, year) |> 
+  filter(year %in% c(2018, 2023)) |> 
+  summarise(average_expense = round(mean(expense, na.rm = TRUE))) |> 
+  ggplot(aes(x = line_item, 
+             y = average_expense, 
+             fill = factor(year))) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = paste0("$",average_expense)), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.5) +
+  labs(title = "Average Expense by Line Item, 2018 vs 2023",
+       x = "Line Item",
+       y = "Average Expense",
+       fill = "Year")
+
+lihtc_expenses |> 
+  group_by(line_item, year) |> 
+  filter(year %in% c(2018, 2023)) |> 
+  summarise(average_expense = round(mean(expense, na.rm = TRUE))) |> 
+  pivot_wider(names_from = year,
+              values_from = average_expense,
+              names_prefix = "average_") |> 
+  mutate(percent_change = ((average_2023 - average_2018) / average_2018) *100 ) |> 
+  ggplot(aes(x = line_item, y = percent_change)) +
+  geom_col(fill = "coral") +
+  geom_text(aes(label = paste0(round(percent_change), "%")), vjust = -0.5) +
+  labs(
+    title = "Percent Change in Average Expense, 2018 to 2023",x = "Line Item",y = "Percent Change (%)")
+
+
+
+```
+
+## Conclusion
+
+While this project also relied heavily on brute force and redundant steps, I showed each step I took to clean and analyze the data clearly and carefully. The cleaning of the data could be shortened wihtout the use of helper tables and the subsequent joining that was necessary as a result of them. As for improvements of the analysis goes, the state unemployment data could have been improved by catching the date format issue earlier, limiting the graphs to contain just the largest changes in unemployment, and including more observations from years before 2025. The baby names questions could have been solved with the use of a defined function that reads in the names and then pulls the longest streak of years that name was in the top 5 baby names. This way, the data does not have to be sliced using slice_max at the end. I would like to revisit this problem and solve it without the use of AI. The LIHTC expenses analysis could also show the median and year-over-year changes for the line items instead of just the mean and changes for the first and last year recorded.
+
+## Citations 
+
+Anthropic. (2026). Claude Code \[Computer software\]. https://claude.com/product/claude
+code. Accessed October 10, 2026.
+
+### Claude Code Transcription
+
+![](images/Screenshot 2026-10-11 213732.png)
+
+![](images/Screenshot 2026-10-11 213749.png)
+
+![](images/Screenshot 2026-10-11 213811.png)
+
+![](images/Screenshot 2026-10-11 213912.png)
+
+![](images/Screenshot 2026-10-11 213927.png)
+
+![](images/Screenshot 2026-10-11 213947.png)
+
+![](images/Screenshot 2026-10-11 213958.png)
