@@ -1,0 +1,14 @@
+---
+title: "Assignment 7"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+The purpose of this assignment is to familiarize myself with HTML and JSON by creating one file containing the same data in each language, read them into R as tables, and then compare these tables to see if there are any differences between the two. The data stored in the files pertains to popular mathematics textbooks.
+
+## Challenges
+
+I have never had to create a JSON or HTML file before. I will have to understand how to make the values within HTML tags match the values in the key-value pairs within the JSON file. So far, the HTML tags seem intuitive in their logic, as every tag opens and closes in the same way. I am fairly confident that the data structure will be identical, the data types will not be. JSON has data type encoding; text is in quotes and numbers are not. All values stored in HTML tables are treated as generic text. This will be good to keep in mind when making my comparisons.
