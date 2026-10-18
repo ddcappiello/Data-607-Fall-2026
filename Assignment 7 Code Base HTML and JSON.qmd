@@ -1,0 +1,63 @@
+---
+title: "Assignment 7"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+The purpose of this assignment is to familiarize myself with HTML and JSON by creating one file containing the same data in each language, read them into R as tables, and then compare these tables to see if there are any differences between the two. The data stored in the files pertains to popular mathematics textbooks.
+
+## Challenges
+
+I have never had to create a JSON or HTML file before. I will have to understand how to make the values within HTML tags match the values in the key-value pairs within the JSON file. So far, the HTML tags seem intuitive in their logic, as every tag opens and closes in the same way. I am fairly confident that the data structure will be identical, the data types will not be. JSON has data type encoding; text is in quotes and numbers are not. All values stored in HTML tables are treated as generic text. This will be good to keep in mind when making my comparisons.
+
+## Analysis
+
+First, I will load in the necessary packages and data. This week, I created the data from scratch. The [books.json](https://raw.githubusercontent.com/ddcappiello/Data-607-Fall-2026/refs/heads/main/books.json) and [books.html](https://raw.githubusercontent.com/ddcappiello/Data-607-Fall-2026/refs/heads/main/books.html) are available on my GitHub.
+
+```{r}
+library(tidyverse)
+library(rvest)
+library(jsonlite)
+
+html_file <- read_html("https://raw.githubusercontent.com/ddcappiello/Data-607-Fall-2026/refs/heads/main/books.html")
+books_json <- fromJSON("https://raw.githubusercontent.com/ddcappiello/Data-607-Fall-2026/refs/heads/main/books.json")
+```
+
+Next, I had to apply more transformations for the books_html. First, I had to use the html_table() function from the rvest package which parses the html table as a data frame. I was given a list of length 1, with the only entry being the tibble in question. Now I could finally have my books_html table by saving the first and only entry in the previously mentioned list as books_html. Now it's time to compare the seemingly indentical tables from the separate files.
+
+```{r}
+table_html <- html_file |> 
+  html_table(convert = FALSE)
+
+books_html <- table_html[[1]]
+
+all.equal(books_html, books_json)
+
+```
+
+The two tables were not identical. Lines one and two from the output of all.equal() refer to books_json being of class data.frame and books_html being of class tibble. This can be easily seen using class(). This can be easily rectified using as.tibble().
+
+```{r}
+class(books_html)
+
+class(books_json)
+
+books_json <- as.tibble(books_json)
+```
+
+Lines three and four of the all.equal() output refer to the column that holds the Year Published. Upon closer inspection, not only are the columns of different types, but books_html has cut of the zeros and the beginning of the data in the ISBN column. This is because R inferred the data type for this these columns because all values in HTML files are stored as generic text. This did not happen in the books_json file because I made sure to put quotes around the ISBN to make sure they were read in as character data so the leading zeroes were not lost. I used the type_convert() function here because I want the columns to be read in with the correct data type, not change the data type after it is read in. With these changes, the data tables are finally equivalent.
+
+```{r}
+books_html_correct <- html_table(html_file, convert = FALSE)[[1]] |>
+  type_convert(col_types = cols(ISBN = col_character(),
+                                `Year Published` = col_integer()))
+
+all.equal(books_html_correct, books_json)
+```
+
+## Conclusion
+
+While this assignment was lighter than most, I still learned a lot about HTML, JSON, and careful data reading. This reminds me of some previous assignments and project 1 where I had read in data and not carefully read the data types for each column. That has taught me to be careful when reading in data and creating new columns in datasets. From this, I am now also aware of the limitations and differences between data tables stored in HTML and JSON files. This will come in handy when scraping data, pulling data in these formats, and also creating files like these either manually or with the use of a program.
