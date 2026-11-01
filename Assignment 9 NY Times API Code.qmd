@@ -1,0 +1,103 @@
+---
+title: "NY Times API Code"
+author: "Dylan DiTucci-Cappiello"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+The purpose of this exercise is to write code that connects to a specifc NY Times API, makes a request for a specific set of data which will retrieved as JSON, and then to answer a question with whatever data I chose. I chose the archive API to analyze the top tagged keywords for a given month. This will show the most reported keywords, not the articles with the highest readership.
+
+## Challenges
+
+Although I learned a bit about restful APIs for my last discussion post, most of my knowledge pertains to how they work, not necessarily how to request data using one. Now, I get to learn how to employ an API connection to request data from a server. Since the NY Times API is restful I should consider the possibility of over-fetching. Luckily, I have some experience cleaning and formatting data from a JSON file from the last assignment. The challenging part, however, would be the more complex format of the data retrieved here.
+
+## Analysis
+
+First I will load the necessary packages. For my purposes, I will load in tidyverse, jsonlite, and httr2.
+
+```{r}
+#| message: false
+library(tidyverse)
+library(jsonlite)
+library(httr2)
+```
+
+Next I will make my connection to the NY Times Archives API. This employs the use of an environment variable that I set using the edit_r_environ() function from the usethis package. This allowed me to directly set an environment variable in order to keep my API key safe.
+
+```{r}
+
+con <- request(paste0("https://api.nytimes.com/svc/archive/v1/2026/10.json?api-key=",Sys.getenv("NYT_API_KEY")))
+
+request <- req_perform(con)
+
+```
+
+Next, I retrieved the data from the request using a few functions from the httr2 and jsonlite packages. First, resp_body_string() pulled all the data from the request into a large character vector. I mistakenly assumed that resp_body_json() would work here, but that lead to the fromJSON() function that I learned in the last assignment not working since it needs a JSON string, URL, or file as its first argument. This function returned another list, but this time it had the data table I wanted so I extracted the specific element "docs" and saved it as a data frame called documents
+
+```{r}
+list_request <- resp_body_string(request)
+
+archives <- fromJSON(list_request, flatten = TRUE)
+
+documents <- archives$response$docs
+```
+
+Now that I had a data frame, I could start my analysis. The question I am looking to answer is: What are the most tagged keywords in NY Times articles in October of 2026? Here, I decided to keep only some of the columns from the original documents data frame and use a tidyr function, unnest(), in order to pull the keywords out for each observation. The keywords in the documents table are all themselves data frames. The unnest() function makes each row in the smaller data frame from the keywords column into a row in the new keywords table.
+
+```{r}
+keywords <- documents |>
+  select(article_id = `_id`, pub_date, section_name, keywords) |> 
+  unnest(keywords, keep_empty = TRUE) |> 
+  rename(keyword_type = name, keyword = value)
+
+```
+
+In order to find the frequency keywords were tagged, I created a new table from the keywords table called keyword_ranking. I used count() to find the number of times each keyword was tagged in an article in the month of October 2026. After doing this, I saw that *NA* was the sixth most tagged keyword, so I removed each observation that had this value in the keywords column. Finally I added the rank back in with a very handy dplyr function, min_rank(). As the R documentation for the package states, this function "gives every tie the same (smallest) value".
+
+```{r}
+keyword_ranking <- keywords |>
+  count(keyword_type, keyword, name = "n_articles", sort = TRUE) |>
+  drop_na(keyword, keyword_type) |> 
+  mutate(rank = min_rank(desc(n_articles)))
+```
+
+Finally, I could see the top ten most tagged keywords in for the month in question. Seven out of the top ten tagged keywords had the *subject* keyword type. Intuitively, this makes sense as the overarching themes are more likely to be spoken about than individual people, organizations, or locations.
+
+```{r}
+keyword_ranking |> 
+  slice_head(n = 10)
+```
+
+I decided to also find the top ten keywords tagged by some specific keyword types. I left out the keyword type *title* because it is almost always about a specific piece of media that is tagged once from a review.
+
+```{r}
+keyword_ranking |> 
+  filter(keyword_type == "Subject") |> 
+  slice_head(n = 10)
+
+keyword_ranking |> 
+  filter(keyword_type == "Location") |> 
+  slice_head(n = 10)
+
+keyword_ranking |> 
+  filter(keyword_type == "Organization") |> 
+  slice_head(n = 10)
+
+keyword_ranking |> 
+  filter(keyword_type == "Person") |> 
+  slice_head(n = 10)
+```
+
+## Conclusion
+
+APIs are helpful tools to get data that can easily be integrated into R code. I was able to connect to the NY Times archives API and request data for a specific month thanks to the clear documentation provided by the NY Times developer site at <https://developer.nytimes.com/docs/archive-product/1/overview>. While I am happy with what I created for this assignment, I see areas for improvement.
+
+### Can the request to data table pipeline be more efficient? 
+
+While only four lines of code, this step took me the longest to figure out. Having to go from a httr response, to a character vector, to an easier to parse list, and then pull out the table I need with a direct reference seems logically inefficient. I pieced this together by searching for other examples of API use in R code in forums and blog posts. There may be a way to go directly from httr response to data frame directly.
+
+### Can the scope of the data question be increased? 
+
+While finding the most tagged keywords for the month of October 2026 was interesting, it is also useful to see how these keywords are tagged month to month, possibly over the course of years. I can envision a video that shows the ranking of each keyword over time. This will show the most reported topics by the NY Times. This could be compared to other major publications to possibly highlight any biases.
