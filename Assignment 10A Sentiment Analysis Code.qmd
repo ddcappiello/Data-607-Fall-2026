@@ -1,0 +1,203 @@
+---
+title: "Assignment 10A Sentiment Analysis"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+This assignment is focused on conducting a sentiment analysis on tidy text as shown in chapter 2, sections 2.2 and 2.3, from *Text Mining with R: A Tidy Approach*. This analysis focuses on tidying text data from the janeaustenr package, finding the most common joy words in *Emma* with the NRC sentiment lexicon, then creating graphs that show positive vs. negative sentiment across all of Jane Austen's novels using ggplot and the Bing sentiment lexicon. I will reproduce this analysis, then extend it using another text corpus and sentiment lexicon.
+
+## Challenges
+
+Since I am already provided with elegant, working code, the most difficult part of the assignment is to find a text corpus and sentiment lexicon similar enough to the examples provided. The tidytext webpage shows that there are four lexicons included within the package; NRC, AFINN, Bing, and Loughran. The Loughran lexicon is made specifically for the analysis of financial documents. If I choose another lexicon, it means I will not be able to use the get_sentiments() function from tidytext.
+
+## Analysis
+
+### Analysis from *Text Mining with R: A Tidy Approach*
+
+```{r}
+#| message: false
+library(tidytext)
+library(janeaustenr)
+library(tidyverse)
+```
+
+```{r}
+tidy_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(
+    linenumber = row_number(),
+    chapter = cumsum(str_detect(text, 
+                                regex("^chapter [\\divxlc]", 
+                                      ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
+
+nrc_joy <- get_sentiments("nrc") %>% 
+  filter(sentiment == "joy")
+
+tidy_books %>%
+  filter(book == "Emma") %>%
+  inner_join(nrc_joy) %>%
+  count(word, sort = TRUE)
+
+jane_austen_sentiment <- tidy_books %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>% 
+  mutate(sentiment = positive - negative)
+
+ggplot(jane_austen_sentiment, aes(index, sentiment, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+```
+
+```{r}
+pride_prejudice <- tidy_books %>% 
+  filter(book == "Pride & Prejudice")
+
+afinn <- pride_prejudice %>% 
+  inner_join(get_sentiments("afinn")) %>% 
+  group_by(index = linenumber %/% 80) %>% 
+  summarise(sentiment = sum(value)) %>% 
+  mutate(method = "AFINN")
+
+bing_and_nrc <- bind_rows(
+  pride_prejudice %>% 
+    inner_join(get_sentiments("bing")) %>%
+    mutate(method = "Bing et al."),
+  pride_prejudice %>% 
+    inner_join(get_sentiments("nrc") %>% 
+                 filter(sentiment %in% c("positive", 
+                                         "negative"))
+    ) %>%
+    mutate(method = "NRC")) %>%
+  count(method, index = linenumber %/% 80, sentiment) %>%
+  pivot_wider(names_from = sentiment,
+              values_from = n,
+              values_fill = 0) %>% 
+  mutate(sentiment = positive - negative)
+
+bind_rows(afinn, 
+          bing_and_nrc) %>%
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 1, scales = "free_y")
+```
+
+### Extension of Analysis
+
+The corpus I chose is the literary works of Hans Christian Andersen, via the package hcandersenr. The sentiment lexicon I chose is Syuzhet which is available in the Syuzhet package.
+
+```{r}
+library(hcandersenr)
+library(syuzhet)
+```
+
+The first step of creating a tidy version of HC Andersen's fairy tales was quite simple. However, there are a few things to consider. There are over 150 stories in this dataset, each story is significantly shorter than any Jane Austen novel, and none of these stories have chapters. I chose six of the stories with titles that intrigued me. I left out the code that created a chapters column.
+
+```{r}
+
+hca_fairytales() |> 
+  distinct(book)
+  
+tidy_hca <- hca_fairytales() |> 
+  filter(language == "English",
+         book %in% c("A story from the sand dunes", 
+                     "Everything in its proper place",
+                     "Five peas from a pod",
+                     "The bond of friendship",
+                     "Thumbelina",
+                     "What old Johanne told")) |> 
+  group_by(book) |> 
+  mutate(line_number = row_number()) |> 
+  ungroup() |> 
+  unnest_tokens(word, text)
+
+```
+
+Joining the filtered HC Andersen table with the NRC and Bing sentiment lexicons exactly the same. I changed the index from being every 80 lines of text to every 15 lines of text due to the length of the stories. We can see that the HC Andersen stories I selected all use quite positive language. Something else to note is that we can see roughly how long each story is by the bin widths. Wider bins mean shorter stories.
+
+```{r}
+tidy_hca |> 
+  inner_join(nrc_joy) |> 
+  count(word, sort = TRUE)
+
+hca_sentiment <- tidy_hca |> 
+  inner_join(get_sentiments("bing")) |> 
+  count(book, index = line_number %/% 15, sentiment) |> 
+  pivot_wider(names_from = sentiment, 
+              values_from = n, 
+              values_fill = 0) |> 
+  mutate(sentiment = positive - negative)
+
+ggplot(hca_sentiment, aes(index, sentiment, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+```
+
+Next, I checked the values contained in the Syuzhet lexicon and saw that each of the 10,748 words were associated with a value between -1 and 1, excluding 0. This means I can use similar reasoning to how the text implemented the AFINN lexicon.
+
+```{r}
+get_sentiment_dictionary(dictionary = "syuzhet", 
+                         language = "english")
+
+```
+
+I already filtered the table down to six stories, but to more closely follow the analysis put forward in the text, I brought it down to one. While creating the syuz table for the Syuzhet lexicon, I used the function get_senitment_dictionary() which is the Syuzhet equivalent of get_senitments() from tidytext.
+
+```{r}
+sand_dunes <- tidy_hca |>  
+  filter(book == "A story from the sand dunes")
+
+syuz <- sand_dunes |> 
+  inner_join(get_sentiment_dictionary("syuzhet")) |> 
+  group_by(index = line_number %/% 15) |> 
+  summarise(sentiment = sum(value)) |> 
+  mutate(method = "syuzhet")
+
+afinn <- sand_dunes |>  
+  inner_join(get_sentiments("afinn")) |>  
+  group_by(index = line_number %/% 15) |>  
+  summarise(sentiment = sum(value)) |>  
+  mutate(method = "AFINN")
+
+bing_and_nrc <- bind_rows(sand_dunes |>  
+    inner_join(get_sentiments("bing")) |> 
+    mutate(method = "Bing et al."),
+  sand_dunes |>  
+    inner_join(get_sentiments("nrc") |>  
+                 filter(sentiment %in% c("positive", 
+                                         "negative"))
+    ) |> 
+    mutate(method = "NRC")) |> 
+  count(method, index = line_number %/% 15, sentiment) |> 
+  pivot_wider(names_from = sentiment,
+              values_from = n,
+              values_fill = 0) |> 
+  mutate(sentiment = positive - negative)
+
+bind_rows(afinn, 
+          bing_and_nrc,
+          syuz) |> 
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~method, ncol = 1, scales = "free_y")
+```
+
+## Conclusion
+
+We can see all four lexicons agree with each other based on the plots. While AFINN and Syuzhet are similar in format, the spread is larger on AFINN because its values range from -5 to 5. Work to expand upon my analysis could look at where each lexicon agrees and disagrees. It would be interesting to compare each lexicon and find which are most similar to each other. Another way to expand upon the analysis would be to incorporate at least one more sentiment lexicon.
+
+## Works Cited 
+
+Silge, J., & Robinson, D. (2017). *Text mining with R: A tidy approach*. O’Reilly Media. <https://www.tidytextmining.com/>
+
+Nielsen, F. Å. (2011). *A new ANEW: Evaluation of a word list for sentiment analysis in microblogs*. [arxiv.Org. https://arxiv.org/abs/1103.2903](arxiv.Org. https://arxiv.org/abs/1103.2903)
+
+Hu, M., & Liu, B. (2004). Mining and summarizing customer reviews. *Proceedings of the 2004 ACM SIGKDD International Conference on Knowledge Discovery and Data Mining - KDD ’04*, 168–177. <https://doi.org/10.1145/1014052.1014073>
+
+Mohammad, S. M., & Turney, P. D. (2012). Crowdsourcing a word–emotion association lexicon. *Computational Intelligence*, *29*(3), 436–465. <https://doi.org/10.1111/j.1467-8640.2012.00460.x>
+
+mjockers. (2019, May 11). *Mjockers/syuzhet*. GitHub. <https://github.com/mjockers/syuzhet>

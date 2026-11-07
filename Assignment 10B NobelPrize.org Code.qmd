@@ -1,0 +1,138 @@
+---
+title: "Assignment 10B NobelPrize.org"
+format: typst
+editor: visual
+---
+
+## Introduction
+
+This assignment focuses on using an API from NobelPrize.org to answer four data driven questions about about the Nobel Prize and its recipients. I will use the free example listed in the assignment instructions as my first question: Which country lost the most Nobel laureates—born there but awarded as a citizen of another country? Naturally, this question leads me to ask: Which country *gained* the most Nobel laureates? Many scientific fields were dominated by men when the Nobel Prize was first awarded. What year did a woman first win each category? The Nobel Prize is not just a medal, it comes with a cash award as well. How has the cash award changed over the last 125 years?
+
+## Challenges
+
+After testing the API connection to NobelPrize.org, I see the relevant data comes in in a significantly trickier format that that of the NY Times Archive that I used last week. This will take much more time to understand as well as careful parsing in order to not miss anything.
+
+## Analysis
+
+First I will load the necessary packages. For my purposes, I will load in tidyverse, jsonlite, and httr2.
+
+```{r}
+#| message: false
+library(tidyverse)
+library(httr2)
+library(jsonlite)
+```
+
+First, I created the connection to the NobelPrize.org API. Upon first creating my connection, I noticed that the request only pulled 75 laureates. I had to change the limit argument to get all of the winners back to the first year of prizes which is 1901.
+
+```{r}
+con <- request("https://api.nobelprize.org/2.1/laureates") |> 
+  req_url_query(limit = 1028)
+
+req <- req_perform(con)
+
+nobel_list <- resp_body_string(req)
+
+nobel_json <- fromJSON(nobel_list, flatten = TRUE)
+
+laureates <- nobel_json$laureates
+```
+
+Once I had the laureates table with all 1028 winners, I saw that there is a column that contained data frames as entries, nobelPrizes. This smaller data frame contains information relevant to the questions I wanted to answer like the prize amount, prize amount adjusted for inflation, and the country each laureate was affiliated with. The country each laureate was affiliated with was also in a nested data frame. I used the unnest() function I learned in last week's assignment to convert these nested tables into their own observations. I also removed columns containing superfluous information, like those with laureates names in Norwegian and Swedish, the Wikipedia links, and if/when the laureate died.
+
+```{r}
+  
+laureates <- laureates |> 
+  select(id, gender, nobelPrizes, ends_with(".en")) |> 
+  unnest(nobelPrizes, names_sep = ".") |> 
+  unnest(nobelPrizes.affiliations, names_sep = ".", keep_empty = TRUE) |> 
+  flatten() |> 
+  select(!c(ends_with(c(".no", ".se", ".sameAs")),
+            starts_with(c("death", "wiki", "founded")),
+            starts_with("birth") & !birth.place.countryNow.en,
+            nobelPrizes.residences, nobelPrizes.links))
+
+
+```
+
+After cleaning the data I can finally answer the questions I put forward.
+
+### Which country lost the most Nobel laureates?
+
+I had to look at two columns to answer this question, the birth place and affiliation of each laureate. I chose to use the "countryNow" versions of these observations to avoid any issues with the name of the country the laureates were born in not matching the name of the country today. I first created a column to check if the countries in question were the same. Then, I grouped by the unique id to create another column to check if the birth country matched the affiliated country any of the times a laureate has won. Filtering on this new column being false allowed me to simply get a count of the birth countries after de-duplicating on id and birth countries. We see that Germany lost the most Nobel laureates. This is consistent with many German scientists fleeing the country in the 1930s.
+
+```{r}
+
+movers <- laureates |> 
+  filter(!is.na(birth.place.countryNow.en),
+         !is.na(nobelPrizes.affiliations.countryNow.en)) |> 
+  mutate(same_country = birth.place.countryNow.en == nobelPrizes.affiliations.countryNow.en) |> 
+  group_by(id) |> 
+  mutate(won_at_home = any(same_country)) |> 
+  ungroup() |> 
+  filter(won_at_home == FALSE)
+
+lost <- movers |> 
+  distinct(id, birth.place.countryNow.en) |> 
+  count(birth.place.countryNow.en, sort = TRUE)
+
+lost
+
+```
+
+### Which country *gained* the most Nobel laureates?
+
+I was able to count the affiliated conutry since I already had the movers table filtered to show if the laureates that did not win in the country they were born in. We see that the USA gained the most laureates which is consistent with the prestige of American research institutions during the 20th century.
+
+```{r}
+gained <- movers |> 
+  distinct(id, nobelPrizes.affiliations.countryNow.en) |> 
+  count(nobelPrizes.affiliations.countryNow.en, sort = TRUE)
+
+gained
+```
+
+### Which year did a woman first win each category?
+
+There are currently six Nobel prizes awarded. To see which year each of these prizes was first awarded to a woman, I filtered on the gender column and then converted the award year column to a number since it was read in as character from the original JSON file. Converting to numeric allowed me to use the min() function to find the earliest year each Nobel Prize category was awarded to a woman. I was surprised to see it took until 2009 for a woman to win the Nobel Prize in Economic Sciences. This was made a little more understandable by checking the first year this prize was awarded.
+
+```{r}
+first_women <- laureates |> 
+  filter(gender == "female") |> 
+  mutate(award_year = as.numeric(nobelPrizes.awardYear)) |> 
+  distinct(id, knownName.en, nobelPrizes.category.en, award_year) |> 
+  group_by(nobelPrizes.category.en) |> 
+  filter(award_year == min(award_year)) |> 
+  ungroup() |> 
+  arrange(award_year)
+
+first_women
+
+first_economics <- laureates |> 
+  filter(nobelPrizes.category.en == "Economic Sciences") |> 
+  mutate(award_year = as.numeric(nobelPrizes.awardYear)) |> 
+  summarise(first_year = min(award_year))
+
+first_economics
+```
+
+### How has the cash award changed over the last 125 years?
+
+I once again converted a character to numeric, here it's the year of the award. Graphing both the nominal and inflation adjusted award values shows trends where the amount of the prize changes and where the value of the prize changes. From about 1940 to 1980, we see the nominal prize increase where the adjusted prize stays roughly the same. This implies the increases in the nominal prize kept up with inflation quite well. Periods of time where both lines grow implies the increase to the prize growing with the value of the Swedish krona. Periods where both lines dip show instances where the nominal prize amount was reduced and the real value of the prize drops as well.
+
+```{r}
+prize_money <- laureates |> 
+  mutate(award_year = as.numeric(nobelPrizes.awardYear)) |> 
+  distinct(award_year, nobelPrizes.prizeAmount, nobelPrizes.prizeAmountAdjusted) |> 
+  arrange(award_year)
+
+ggplot(prize_money) +
+  geom_line(aes(x = award_year, y = nobelPrizes.prizeAmount, color = "Nominal")) +
+  geom_line(aes(x = award_year, y = nobelPrizes.prizeAmountAdjusted, color = "Adjusted for inflation")) +
+  labs(x = "Year", y = "Prize amount (SEK)", color = NULL) + 
+  scale_y_log10()
+```
+
+## Conclusion
+
+This assignment shows how many different questions can be answered with the same data set. Data like these are often freely available with the only barrier being understanding how to use an API. I questioned the efficiency of the API call in assignment 9 but kept a very similar structure for this assignment. While I do still think there is a way to more efficiently request data from an API, the way outlined here is a ground up approach. I took this approach because I do not know exactly what the data will look like until I see it. I am proud of how I answered these questions but it stands to reason there are cleaner, more elegant approaches. Based on our discussion in class on 11/4, a good use of AI would be to have it critique my code to show me some more elegant approaches to the same questions.
